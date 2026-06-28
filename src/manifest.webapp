@@ -1,0 +1,19 @@
+{
+  "launch_path": "index.html",
+  "default_locale": "en",
+  "activities": {
+    "dhis": { "href": "index.html" }
+  },
+  "type": "app",
+  "name": "Card Designer",
+  "version": "2.0.0",
+  "description": "WYSIWYG Printable Card Designer with Datastore persistence",
+  "developer": {
+    "name": "Padam",
+    "email": "padam.dahal@giz.de",
+    "url": "",
+    "company": ""
+  },
+  "icons": { "48": "img/icon.png" },
+  "manifest_generated_at": ""
+}
