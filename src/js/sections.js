@@ -18,49 +18,57 @@ function setStagesForDropdowns(stages) {
 function addSection(opts) {
   opts = opts || {};
   sectionCounter++;
-  const id   = opts.id   || `sec_${sectionCounter}_${Date.now()}`;
-  const name = opts.name || `Section ${sections.length + 1}`;
-  const type = opts.type || 'single';
+  const id      = opts.id      || `sec_${sectionCounter}_${Date.now()}`;
+  const name    = opts.name    || `Section ${sections.length + 1}`;
+  const stageId = opts.stageId || null;
+  const mode    = opts.mode    || 'today';
 
   const tpl = document.getElementById('sectionTemplate').content.cloneNode(true);
-  const el  = tpl.querySelector('.section-block');
+  const container = document.getElementById('sectionsContainer');
+  container.appendChild(tpl);
+  // After appending the fragment, grab the newly added element from the live DOM
+  const el = container.lastElementChild;
   el.dataset.sectionId = id;
   el.querySelector('.section-name-input').value = name;
 
-  document.getElementById('sectionsContainer').appendChild(el);
+  const editorBody = createRichEditor(el.querySelector('.editor-slot-body'),
+    'HTML content — click a field on the left to insert…');
 
-  const editorHeader = createRichEditor(el.querySelector('.editor-slot-header'),
-    'Header HTML — printed once, e.g. table-opening tag + column headers…');
-  const editorBody   = createRichEditor(el.querySelector('.editor-slot-body'),
-    'Body HTML — click a field on the left to insert it here…');
-  const editorFooter = createRichEditor(el.querySelector('.editor-slot-footer'),
-    'Footer HTML — printed once, e.g. closing tags…');
-
-  const section = {
-    id, name, type,
-    stageId: opts.stageId || null,
-    el,
-    editors: { header: editorHeader, body: editorBody, footer: editorFooter },
-  };
+  const section = { id, name, stageId, mode, el, editors: { body: editorBody } };
   sections.push(section);
 
-  // Track focus per editor using Jodit's focus event
-  ['header','body','footer'].forEach(key => {
-    section.editors[key]._jodit.events.on('focus', () => {
-      _setActive(section, key);
-    });
-    section.editors[key].onChange(() => refreshJson());
-  });
+  section.editors.body._jodit.events.on('focus', () => _setActive(section, 'body'));
+  section.editors.body.onChange(() => refreshJson());
 
-  _applyType(section, type);
   _bindControls(section);
 
-  if (opts.htmlHeader) editorHeader.setHtml(opts.htmlHeader);
-  if (opts.htmlBody)   editorBody.setHtml(opts.htmlBody);
-  if (opts.htmlFooter) editorFooter.setHtml(opts.htmlFooter);
+  // Set mode dropdown value
+  el.querySelector('.mode-select').value = mode;
 
-  _setActive(section, 'body');
+  // Populate stage after push so _populateStageSelect can find it
+  _populateStageSelect(section);
+  if (stageId) el.querySelector('.stage-select').value = stageId;
+
+  if (opts.htmlBody) editorBody.setHtml(opts.htmlBody);
+
+  // Accordion: collapse all others, expand this one
+  _expandOnly(section);
   return section;
+}
+
+// ── Accordion ────────────────────────────────────────────────────────────────
+
+function _expandOnly(section) {
+  sections.forEach(s => {
+    if (s.id === section.id) {
+      s.el.querySelector('.section-body').classList.remove('collapsed');
+      s.el.querySelector('.btn-collapse').textContent = '▲';
+    } else {
+      s.el.querySelector('.section-body').classList.add('collapsed');
+      s.el.querySelector('.btn-collapse').textContent = '▼';
+    }
+  });
+  _setActive(section, 'body');
 }
 
 function _setActive(section, editorKey) {
@@ -73,22 +81,20 @@ function _setActive(section, editorKey) {
 function _activeEditor(section) {
   section = section || activeSection;
   if (!section) return null;
-  // For single sections, always use body even if activeEditorKey says otherwise
-  if (section.type === 'single') return section.editors.body;
-  return section.editors[activeEditorKey] || section.editors.body;
+  return section.editors.body;
 }
 
 function deleteSection(id) {
   const idx = sections.findIndex(s => s.id === id);
   if (idx === -1) return;
   const s = sections[idx];
-  ['header','body','footer'].forEach(key => {
-    try { s.editors[key]._jodit.destruct(); } catch(e) {}
-  });
+  try { s.editors.body._jodit.destruct(); } catch(e) {}
   s.el.remove();
   sections.splice(idx, 1);
   if (activeSection && activeSection.id === id) {
-    activeSection = sections[sections.length - 1] || null;
+    const next = sections[sections.length - 1] || null;
+    if (next) _expandOnly(next);
+    else activeSection = null;
   }
 }
 
@@ -102,19 +108,27 @@ function _bindControls(section) {
     refreshJson();
   });
 
-  el.querySelectorAll('.type-btn').forEach(btn => {
-    btn.addEventListener('click', () => _applyType(section, btn.dataset.type));
-  });
-
   el.querySelector('.stage-select').addEventListener('change', e => {
     section.stageId = e.target.value || null;
     refreshJson();
   });
 
+  el.querySelector('.mode-select').addEventListener('change', e => {
+    section.mode = e.target.value;
+    refreshJson();
+  });
+
   el.querySelector('.btn-collapse').addEventListener('click', () => {
-    const body = el.querySelector('.section-body');
-    const collapsed = body.classList.toggle('collapsed');
-    el.querySelector('.btn-collapse').textContent = collapsed ? '▼' : '▲';
+    const body      = el.querySelector('.section-body');
+    const collapsed = body.classList.contains('collapsed');
+    if (collapsed) {
+      // Expand this one, collapse rest
+      _expandOnly(section);
+    } else {
+      // Just collapse this one
+      body.classList.add('collapsed');
+      el.querySelector('.btn-collapse').textContent = '▼';
+    }
   });
 
   el.querySelector('.btn-delete-section').addEventListener('click', () => {
@@ -123,45 +137,10 @@ function _bindControls(section) {
   });
 }
 
-function _applyType(section, type) {
-  section.type = type;
-  const el  = section.el;
-  const sel = el.querySelector('.stage-select');
-
-  el.querySelectorAll('.type-btn').forEach(b =>
-    b.classList.toggle('active', b.dataset.type === type));
-  el.classList.toggle('type-repeatable', type === 'repeatable');
-
-  // Show/hide header & footer slots — only meaningful for repeatable
-  const headerWrap = el.querySelector('.editor-wrap-header');
-  const footerWrap = el.querySelector('.editor-wrap-footer');
-  if (headerWrap) headerWrap.classList.toggle('hidden', type !== 'repeatable');
-  if (footerWrap) footerWrap.classList.toggle('hidden', type !== 'repeatable');
-
-  // Update body hint text
-  const bodyHint = el.querySelector('.body-hint');
-  if (bodyHint) {
-    bodyHint.textContent = type === 'repeatable'
-      ? '(repeats once per row)'
-      : '(the full card content)';
-  }
-
-  if (type === 'repeatable') {
-    sel.classList.remove('hidden');
-    _populateStageSelect(section);
-    if (activeSection && activeSection.id === section.id) activeEditorKey = 'body';
-  } else {
-    sel.classList.add('hidden');
-    section.stageId = null;
-    if (activeSection && activeSection.id === section.id) activeEditorKey = 'body';
-  }
-  refreshJson();
-}
-
 function _populateStageSelect(section) {
-  const sel = section.el.querySelector('.stage-select');
+  const sel     = section.el.querySelector('.stage-select');
   const current = section.stageId;
-  sel.innerHTML = '<option value="">— stage (optional) —</option>';
+  sel.innerHTML = '<option value="">— no stage —</option>';
   programStages.forEach(st => {
     const opt = document.createElement('option');
     opt.value = st.id; opt.textContent = st.name;
@@ -170,7 +149,7 @@ function _populateStageSelect(section) {
   });
 }
 
-// ── Insert field into active editor ──────────────────────────────────────────
+// ── Insert field ─────────────────────────────────────────────────────────────
 
 function insertFieldIntoActiveSection(cfg) {
   if (!activeSection) activeSection = sections[sections.length - 1];
@@ -181,63 +160,52 @@ function insertFieldIntoActiveSection(cfg) {
   editor.insertHtmlAtCursor(expr);
   editor.focus();
   refreshJson();
-  trackUsedField(cfg.uid);
 }
 
-// ── Track fields ──────────────────────────────────────────────────────────────
+// ── Used UIDs (for optionSets payload) ───────────────────────────────────────
 
 function getUsedFieldUids() {
-  const uids = new Set();
+  const uids    = new Set();
   const pattern = /\{([A-Za-z][A-Za-z0-9]{10})(?:\.[A-Za-z]+)?\}/g;
   sections.forEach(s => {
-    ['header','body','footer'].forEach(key => {
-      const html = s.editors[key].getHtml();
-      let m;
-      while ((m = pattern.exec(html)) !== null) uids.add(m[1]);
-    });
+    const html = s.editors.body.getHtml();
+    let m;
+    while ((m = pattern.exec(html)) !== null) uids.add(m[1]);
   });
   return uids;
 }
 
-function trackUsedField(uid) {}
-
-// ── Serialise ────────────────────────────────────────────────────────────────
+// ── Serialise ─────────────────────────────────────────────────────────────────
 
 function serialiseSections() {
   return sections.map(s => {
     const obj = {
       id:       s.id,
-      type:     s.type,
       title:    s.name,
+      mode:     s.mode || 'today',
       htmlBody: quillHtmlToRaw(s.editors.body.getHtml()),
     };
-    if (s.type === 'repeatable') {
-      obj.htmlHeader = quillHtmlToRaw(s.editors.header.getHtml());
-      obj.htmlFooter = quillHtmlToRaw(s.editors.footer.getHtml());
-      if (s.stageId) obj.programStage = s.stageId;
-    }
+    if (s.stageId) obj.programStage = s.stageId;
     return obj;
   });
 }
 
-// ── Restore ──────────────────────────────────────────────────────────────────
+// ── Restore ───────────────────────────────────────────────────────────────────
 
 function restoreSections(saved) {
   sections.forEach(s => {
-    ['header','body','footer'].forEach(key => {
-      try { s.editors[key]._jodit.destruct(); } catch(e) {}
-    });
+    try { s.editors.body._jodit.destruct(); } catch(e) {}
     s.el.remove();
   });
   sections = []; activeSection = null; sectionCounter = 0;
   if (!saved || !saved.length) { addSection(); return; }
   saved.forEach(s => addSection({
-    id:         s.id,
-    name:       s.title || s.name || 'Section',
-    type:       s.type  || 'single',
-    stageId:    s.programStage || null,
-    htmlHeader: rehydrateExpressions(s.htmlHeader || ''),
-    htmlBody:   rehydrateExpressions(s.htmlBody   || ''),
-    htmlFooter: rehydrateExpressions(s.htmlFooter || ''),
+    id:       s.id,
+    name:     s.title || s.name || 'Section',
+    stageId:  s.programStage || null,
+    mode:     s.mode || 'today',
+    htmlBody: rehydrateExpressions(s.htmlBody || ''),
   }));
+  // After restore, expand only the first section
+  if (sections.length) _expandOnly(sections[0]);
 }

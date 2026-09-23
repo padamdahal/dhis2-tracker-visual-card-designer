@@ -4,14 +4,12 @@
   <meta charset="UTF-8" />
   <title>Card Designer — DHIS2</title>
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <!-- Jodit Editor -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jodit/4.6.13/es2021/jodit.min.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jodit/4.6.13/es2021/jodit.min.js"></script>
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
 
-<!-- TOP BAR -->
 <header class="topbar">
   <div class="topbar-left">
     <span class="logo">⬡ Card Designer</span>
@@ -25,7 +23,6 @@
   </div>
 </header>
 
-<!-- MAIN LAYOUT -->
 <div class="app-layout">
 
   <!-- LEFT PANEL -->
@@ -42,9 +39,8 @@
     </div>
   </aside>
 
-  <!-- CENTER: Sections + JSON panel -->
+  <!-- CENTER -->
   <main class="editor-area">
-    <!-- Card meta -->
     <div class="card-meta-bar">
       <div class="meta-field">
         <label>Datastore Key</label>
@@ -58,9 +54,15 @@
         <label>Card Name</label>
         <input id="cardName" class="meta-input" type="text" placeholder="e.g. OPD Summary" />
       </div>
-      <div class="meta-field meta-field-wide">
+      <div class="meta-field">
         <label>Access At</label>
-        <input id="cardAccessAt" class="meta-input" type="text" value="everywhere | enrollment-dashboard | new-edit-event | view-event" />
+        <select id="cardAccessAt" class="meta-input">
+          <option value="everywhere">everywhere</option>
+          <option value="enrollment-dashboard">enrollment-dashboard</option>
+          <option value="new-event">new-event</option>
+          <option value="edit-event">edit-event</option>
+          <option value="view-event">view-event</option>
+        </select>
       </div>
       <button id="btnAddSection" class="btn btn-primary">+ Add Section</button>
     </div>
@@ -68,7 +70,7 @@
     <div id="sectionsContainer"></div>
   </main>
 
-  <!-- RIGHT: JSON output panel -->
+  <!-- RIGHT: JSON panel -->
   <aside class="json-panel" id="jsonPanel">
     <div class="json-panel-header">
       <span>JSON Output</span>
@@ -83,7 +85,7 @@
 
 </div>
 
-<!-- LOAD TEMPLATE MODAL -->
+<!-- LOAD MODAL -->
 <div id="loadModal" class="modal hidden">
   <div class="modal-box modal-sm">
     <div class="modal-header">
@@ -101,40 +103,28 @@
   </div>
 </div>
 
-
-
 <!-- SECTION TEMPLATE -->
 <template id="sectionTemplate">
   <div class="section-block" data-section-id="">
     <div class="section-header">
       <div class="section-header-left">
-        <span class="drag-handle" title="Drag to reorder">⠿</span>
+        <span class="drag-handle">⠿</span>
         <input class="section-name-input" type="text" value="Section" />
       </div>
       <div class="section-header-right">
-        <div class="type-toggle">
-          <button class="type-btn active" data-type="single">Single</button>
-          <button class="type-btn" data-type="repeatable">Repeatable</button>
-        </div>
-        <select class="stage-select hidden" title="Program stage (optional)"></select>
+        <label class="section-meta-label">Stage</label>
+        <select class="stage-select" title="Program stage"></select>
+        <label class="section-meta-label">Mode</label>
+        <select class="mode-select" title="Data mode">
+          <option value="today">today</option>
+          <option value="history">history</option>
+        </select>
         <button class="btn-icon btn-collapse" title="Collapse">▲</button>
-        <button class="btn-icon btn-delete-section" title="Delete section">✕</button>
+        <button class="btn-icon btn-delete-section" title="Delete">✕</button>
       </div>
     </div>
-
     <div class="section-body">
-      <div class="editor-wrap-header hidden">
-        <div class="sub-editor-label">Header HTML <span class="sub-hint">(printed once — e.g. opening &lt;table&gt; + column headers)</span></div>
-        <div class="editor-slot editor-slot-header"></div>
-      </div>
-
-      <div class="sub-editor-label sub-editor-label-body">Body HTML <span class="sub-hint body-hint">(repeats once per row when section is Repeatable)</span></div>
       <div class="editor-slot editor-slot-body"></div>
-
-      <div class="editor-wrap-footer hidden">
-        <div class="sub-editor-label">Footer HTML <span class="sub-hint">(printed once — e.g. closing &lt;/table&gt;)</span></div>
-        <div class="editor-slot editor-slot-footer"></div>
-      </div>
     </div>
   </div>
 </template>
